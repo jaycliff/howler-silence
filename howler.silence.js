@@ -1,7 +1,15 @@
 /*global Howler*/
-Howler.silence = (function (audioCtx) {
+/*
+    ISSUE:
+        sound won't seem to loop forever (sound will 'stop' playing, and will only resume when another sound is played)
+        possible reason may be due to Howler's setup. A set timer could possibly halt sounds when not created in the usual Howler-way
+        UPDATE: Howler._autoSuspend();
+*/
+Howler.silence = (function (Howler, audioCtx) {
     "use strict";
-    var channels = 2, // Stereo
+    var target = Howler.masterGain,
+        autoresume_id,
+        channels = 2, // Stereo
         source,
         playing = false,
         channel,
@@ -18,7 +26,15 @@ Howler.silence = (function (audioCtx) {
             nowBuffering[i] = 0; // Silence?
         }
     }
+    function activateContext() {
+        Howler._autoResume();
+        autoresume_id = setTimeout(activateContext, 1000);
+    }
     return {
+        connect: function connect(node) {
+            target = node;
+            return this;
+        },
         isPlaying: function isPlaying() {
             return playing;
         },
@@ -28,15 +44,20 @@ Howler.silence = (function (audioCtx) {
                 source = audioCtx.createBufferSource(); // This is the AudioNode to use when we want to play an AudioBuffer
                 source.loop = true;
                 source.buffer = myAudioBuffer; // set the buffer in the AudioBufferSourceNode
-                source.connect(audioCtx.destination); // connect the AudioBufferSourceNode to the destination so we can hear the sound
+                source.connect(target); // connect the AudioBufferSourceNode to the destination so we can hear the sound
                 source.start(0); // start the source playing
+                activateContext();
             }
+            return this;
         },
         stop: function stop() {
             if (playing) {
                 source.stop();
                 playing = false;
+                clearTimeout(autoresume_id);
+                Howler._autoSuspend();
             }
+            return this;
         }
     };
-}(Howler.ctx));
+}(Howler, Howler.ctx));
